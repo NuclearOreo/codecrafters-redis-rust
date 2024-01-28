@@ -4,16 +4,24 @@ use std::{
     net::TcpStream,
 };
 
-pub fn processor(mut stream: TcpStream) -> Result<()> {
-    let mut buf = vec![0; 30];
-    stream.read(&mut buf)?;
+pub fn processor(mut stream: TcpStream) {
+    loop {
+        let mut buf = vec![0; 512];
+        match stream.read(&mut buf) {
+            Ok(_) => match pong(&mut stream) {
+                Ok(_) => println!("Successful pong"),
+                Err(e) => eprintln!("failed to pong: {}", e),
+            },
+            Err(e) => {
+                eprint!("Error with stream: {}", e);
+                break;
+            }
+        }
+    }
+}
 
-    let s = String::from_utf8(buf)?;
-    let s = s.trim_matches('\0');
-    let tokens: Vec<&str> = s.split("\r\n").collect();
-
-    println!("{:?}", tokens);
-
+fn pong(stream: &mut TcpStream) -> Result<()> {
     stream.write(b"+PONG\r\n")?;
+    stream.flush()?;
     Ok(())
 }

@@ -10,10 +10,7 @@ fn main() {
         match stream {
             Ok(stream) => {
                 println!("accepted new connection");
-                match processor(stream) {
-                    Ok(_) => println!("processed connection"),
-                    Err(e) => eprint!("failed to process connection: {}", e),
-                }
+                processor(stream)
             }
             Err(e) => {
                 eprintln!("Failed to accept new connection: {}", e);
