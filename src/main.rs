@@ -1,20 +1,25 @@
+use anyhow::Result;
 use redis_starter_rust::process::processor;
 use std::net::TcpListener;
+use std::thread;
 
-fn main() {
-    println!("**Logs from your program will appear here!**");
+const IP: &str = "127.0.0.1";
+const PORT: &str = "6379";
 
-    let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
+fn main() -> Result<()> {
+    println!("Logs from your program will appear here!");
+
+    let listener = TcpListener::bind(format!("{IP}:{PORT}")).unwrap();
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 println!("accepted new connection");
-                processor(stream)
+                thread::spawn(move || processor(stream));
             }
-            Err(e) => {
-                eprintln!("Failed to accept new connection: {}", e);
-            }
+            Err(e) => eprintln!("Failed to accept new connection: {}", e),
         }
     }
+
+    Ok(())
 }
