@@ -1,3 +1,5 @@
+use crate::redis_message::{RedisCommand, COMMANDS};
+use crate::BUFFER_SIZE;
 use anyhow::Result;
 use std::{
     io::{Read, Write},
@@ -6,18 +8,18 @@ use std::{
 
 pub fn processor(mut stream: TcpStream) -> Result<()> {
     loop {
-        let mut buf = [0; 512];
+        let mut buf = [0; BUFFER_SIZE];
         match stream.read(&mut buf) {
             Ok(_) => {
                 if buf[0] == 0 {
                     continue;
                 }
 
-                let tokens = parse_request(&buf)?;
-                match &tokens[0][..] {
-                    "COMMAND" | "command" => connected(&mut stream)?,
-                    "PING" | "ping" => pong(&mut stream)?,
-                    "ECHO" | "echo" => echo(tokens[1..].join(" "), &mut stream)?,
+                let command = RedisCommand::parse_request(&buf)?;
+                match command.command {
+                    COMMANDS::COMMAND => connected(&mut stream)?,
+                    COMMANDS::PING => pong(&mut stream)?,
+                    COMMANDS::ECHO => echo(&command.tokens[0], &mut stream)?,
                     _ => invalid_command(&mut stream)?,
                 }
             }
@@ -28,40 +30,6 @@ pub fn processor(mut stream: TcpStream) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn parse_request(request: &[u8; 512]) -> Result<Vec<String>> {
-    let (mut index, mut bytes) = (1, vec![]);
-
-    while index < 512 && request[index] as char != '\r' {
-        bytes.push(request[index]);
-        index += 1;
-    }
-
-    let token = String::from_utf8(bytes)?;
-    let _size: usize = token.parse()?;
-    bytes = vec![];
-    index += 2;
-
-    let mut tokens = vec![];
-    if request[index] as char == '$' {
-        index += 1;
-        while index < 512 && request[index] as char != '\r' && request[index] != 0 {
-            bytes.push(request[index]);
-            index += 1;
-
-            let token = String::from_utf8(bytes)?;
-            let size: usize = token.parse()?;
-            bytes = vec![];
-
-            index += 2;
-
-            let token = String::from_utf8(request[index..index + size].to_vec())?;
-            tokens.push(token);
-            index += size + 3;
-        }
-    }
-    Ok(tokens)
 }
 
 fn connected(stream: &mut TcpStream) -> Result<()> {
@@ -76,15 +44,15 @@ fn pong(stream: &mut TcpStream) -> Result<()> {
     Ok(())
 }
 
-fn echo(token: String, stream: &mut TcpStream) -> Result<()> {
-    let s = format!("+{}\r\n", token);
+fn echo(token: &str, stream: &mut TcpStream) -> Result<()> {
+    let s = format!("+\"{}\"\r\n", token);
     stream.write(s.as_bytes())?;
     stream.flush()?;
     Ok(())
 }
 
 fn invalid_command(stream: &mut TcpStream) -> Result<()> {
-    stream.write(b"+invalid command\r\n")?;
+    stream.write(b"-INVALID COMMAND\r\n")?;
     stream.flush()?;
     Ok(())
 }

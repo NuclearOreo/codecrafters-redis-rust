@@ -1,5 +1,5 @@
 use anyhow::Result;
-use redis_starter_rust::process::processor;
+use redis_starter_rust::{database::DataBase, process::processor};
 use std::net::TcpListener;
 use std::thread;
 
@@ -15,9 +15,9 @@ fn main() -> Result<()> {
         match stream {
             Ok(stream) => {
                 println!("accepted new connection");
-                thread::spawn(move || match processor(stream) {
+                thread::spawn(|| match processor(stream) {
                     Ok(_) => println!("Success"),
-                    Err(e) => eprintln!("failed: {e}"),
+                    Err(e) => eprintln!("Failed: {e}"),
                 });
             }
             Err(e) => eprintln!("Failed to accept new connection: {}", e),
