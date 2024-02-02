@@ -1,6 +1,5 @@
 use crate::BUFFER_SIZE;
-use anyhow::{Error, Result};
-use std::str::FromStr;
+use anyhow::Result;
 
 #[derive(Debug)]
 pub enum COMMANDS {
@@ -9,20 +8,19 @@ pub enum COMMANDS {
     ECHO,
     GET,
     SET,
+    INVALID,
 }
 
-impl FromStr for COMMANDS {
-    type Err = anyhow::Error;
-
-    fn from_str(input: &str) -> Result<COMMANDS, Self::Err> {
+impl COMMANDS {
+    fn from_str(input: &str) -> COMMANDS {
         let input = input.to_lowercase();
         match &input[..] {
-            "command" | "COMMAND" => Ok(COMMANDS::COMMAND),
-            "ping" | "PING" => Ok(COMMANDS::PING),
-            "echo" | "ECHO" => Ok(COMMANDS::ECHO),
-            "get" | "GET" => Ok(COMMANDS::GET),
-            "set" | "SET" => Ok(COMMANDS::SET),
-            _ => Err(Error::msg("invalid command")),
+            "command" | "COMMAND" => COMMANDS::COMMAND,
+            "ping" | "PING" => COMMANDS::PING,
+            "echo" | "ECHO" => COMMANDS::ECHO,
+            "get" | "GET" => COMMANDS::GET,
+            "set" | "SET" => COMMANDS::SET,
+            _ => COMMANDS::INVALID,
         }
     }
 }
@@ -35,7 +33,7 @@ pub struct RedisCommand {
 
 impl RedisCommand {
     pub fn new(tokens: Vec<String>) -> Result<RedisCommand> {
-        let command = COMMANDS::from_str(&tokens[0][..])?;
+        let command = COMMANDS::from_str(&tokens[0][..]);
         Ok(RedisCommand {
             command,
             tokens: tokens[1..].to_vec(),

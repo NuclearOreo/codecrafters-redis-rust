@@ -10,12 +10,14 @@ fn main() -> Result<()> {
     println!("Logs from your program will appear here!");
 
     let listener = TcpListener::bind(format!("{IP}:{PORT}"))?;
+    let database = DataBase::new();
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 println!("accepted new connection");
-                thread::spawn(|| match processor(stream) {
+                let clone = database.clone();
+                thread::spawn(|| match processor(stream, clone) {
                     Ok(_) => println!("Success"),
                     Err(e) => eprintln!("Failed: {e}"),
                 });
