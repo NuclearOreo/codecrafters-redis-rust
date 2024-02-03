@@ -1,5 +1,6 @@
 use crate::BUFFER_SIZE;
-use anyhow::Result;
+use anyhow::{bail, Result};
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 pub enum COMMANDS {
@@ -29,14 +30,45 @@ impl COMMANDS {
 pub struct RedisCommand {
     pub command: COMMANDS,
     pub tokens: Vec<String>,
+    pub expiry: SystemTime,
 }
 
 impl RedisCommand {
     pub fn new(tokens: Vec<String>) -> Result<RedisCommand> {
         let command = COMMANDS::from_str(&tokens[0][..]);
+        let mut expiry = SystemTime::now() + Duration::from_secs(u32::MAX as _);
+
+        match command {
+            COMMANDS::ECHO => match tokens.len() {
+                3.. => bail!("ECHO - too many tokens"),
+                0..=1 => bail!("ECHO - too few tokens"),
+                _ => (),
+            },
+            COMMANDS::GET => match tokens.len() {
+                3.. => bail!("GET - too many tokens"),
+                0..=1 => bail!("GET - too few tokens"),
+                _ => (),
+            },
+            COMMANDS::SET => match tokens.len() {
+                6.. => bail!("SET - too many tokens"),
+                0..=2 => bail!("SET - too few tokens"),
+                4 => bail!("SET - missing time value"),
+                5 => {
+                    let val: u64 = match tokens[4].parse() {
+                        Ok(v) => v,
+                        Err(e) => bail!("SET - {}", e.to_string()),
+                    };
+                    expiry = SystemTime::now() + Duration::from_millis(val);
+                }
+                _ => (),
+            },
+            _ => (),
+        }
+
         Ok(RedisCommand {
             command,
             tokens: tokens[1..].to_vec(),
+            expiry,
         })
     }
 
@@ -49,7 +81,7 @@ impl RedisCommand {
         }
 
         let token = String::from_utf8(bytes)?;
-        let _size: usize = token.parse()?;
+        let _size_of_array: usize = token.parse()?;
         bytes = vec![];
         index += 2;
 
@@ -57,8 +89,10 @@ impl RedisCommand {
         if index < BUFFER_SIZE && request[index] as char == '$' {
             index += 1;
             while index < BUFFER_SIZE && request[index] as char != '\r' && request[index] != 0 {
-                bytes.push(request[index]);
-                index += 1;
+                while index < BUFFER_SIZE && request[index] as char != '\r' {
+                    bytes.push(request[index]);
+                    index += 1;
+                }
 
                 let token = String::from_utf8(bytes)?;
                 let size: usize = token.parse()?;

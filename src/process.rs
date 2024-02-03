@@ -17,28 +17,34 @@ pub fn processor(mut stream: TcpStream, database: Arc<DataBase>) -> Result<()> {
                     continue;
                 }
 
-                let command = RedisCommand::parse_request(&buf)?;
-                match command.command {
-                    COMMANDS::COMMAND => connected(&mut stream)?,
-                    COMMANDS::PING => pong(&mut stream)?,
+                let redis_cmd = match RedisCommand::parse_request(&buf) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error(
+                            &format!("Failed to parse message: {}", e.to_string()),
+                            &mut stream,
+                        )?;
+                        continue;
+                    }
+                };
+
+                match redis_cmd.command {
+                    COMMANDS::COMMAND => result("CONNECTED", &mut stream)?,
+                    COMMANDS::PING => result("PONG", &mut stream)?,
                     COMMANDS::GET => {
-                        if command.tokens.len() == 0 || command.tokens.len() > 1 {
-                            error("get - invalid number of tokens", &mut stream)?;
+                        let val = database.get(redis_cmd);
+                        if val.is_empty() {
+                            null(&mut stream)?
                         } else {
-                            let val = database.get(command.tokens[0].clone());
                             result(&val, &mut stream)?
                         }
                     }
                     COMMANDS::SET => {
-                        if command.tokens.len() == 0 || command.tokens.len() > 2 {
-                            error("set - invalid number of tokens", &mut stream)?;
-                        } else {
-                            database.set(command.tokens[0].clone(), command.tokens[1].clone());
-                            result("OK", &mut stream)?
-                        }
+                        database.set(redis_cmd);
+                        result("OK", &mut stream)?
                     }
-                    COMMANDS::ECHO => echo(&command.tokens[0], &mut stream)?,
-                    COMMANDS::INVALID => invalid_command(&mut stream)?,
+                    COMMANDS::ECHO => result(&redis_cmd.tokens[0], &mut stream)?,
+                    COMMANDS::INVALID => error("INVALID COMMAND", &mut stream)?,
                 }
             }
             Err(e) => {
@@ -50,41 +56,23 @@ pub fn processor(mut stream: TcpStream, database: Arc<DataBase>) -> Result<()> {
     Ok(())
 }
 
-fn connected(stream: &mut TcpStream) -> Result<()> {
-    stream.write(b"+CONNECTED\r\n")?;
-    stream.flush()?;
-    Ok(())
-}
-
-fn pong(stream: &mut TcpStream) -> Result<()> {
-    stream.write(b"+PONG\r\n")?;
-    stream.flush()?;
-    Ok(())
-}
-
-fn echo(token: &str, stream: &mut TcpStream) -> Result<()> {
-    let s = format!("+{}\r\n", token);
-    stream.write(s.as_bytes())?;
-    stream.flush()?;
-    Ok(())
-}
-
 fn result(msg: &str, stream: &mut TcpStream) -> Result<()> {
     let s = format!("+{msg}\r\n");
-    stream.write(s.as_bytes())?;
-    stream.flush()?;
-    Ok(())
+    write(&s, stream)
+}
+
+fn null(stream: &mut TcpStream) -> Result<()> {
+    let s = format!("$-1\r\n");
+    write(&s, stream)
 }
 
 fn error(msg: &str, stream: &mut TcpStream) -> Result<()> {
     let s = format!("-{msg}\r\n");
-    stream.write(s.as_bytes())?;
-    stream.flush()?;
-    Ok(())
+    write(&s, stream)
 }
 
-fn invalid_command(stream: &mut TcpStream) -> Result<()> {
-    stream.write(b"-INVALID COMMAND\r\n")?;
+fn write(msg: &str, stream: &mut TcpStream) -> Result<()> {
+    stream.write(msg.as_bytes())?;
     stream.flush()?;
     Ok(())
 }
