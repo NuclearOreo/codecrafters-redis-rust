@@ -4,24 +4,27 @@ use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 pub enum COMMANDS {
-    COMMAND,
-    PING,
-    ECHO,
-    GET,
-    SET,
-    INVALID,
+    Command,
+    Get,
+    Ping,
+    Echo,
+    Set,
+    ConfigGet,
+    Invalid,
 }
 
 impl COMMANDS {
-    fn from_str(input: &str) -> COMMANDS {
-        let input = input.to_lowercase();
-        match &input[..] {
-            "command" | "COMMAND" => COMMANDS::COMMAND,
-            "ping" | "PING" => COMMANDS::PING,
-            "echo" | "ECHO" => COMMANDS::ECHO,
-            "get" | "GET" => COMMANDS::GET,
-            "set" | "SET" => COMMANDS::SET,
-            _ => COMMANDS::INVALID,
+    fn from_str(token1: &str, token2: &str) -> COMMANDS {
+        let token1 = token1.to_lowercase();
+        let token2 = token2.to_lowercase();
+        match (&token1[..], &token2[..]) {
+            ("command", _) => COMMANDS::Command,
+            ("ping", _) => COMMANDS::Ping,
+            ("echo", _) => COMMANDS::Echo,
+            ("get", _) => COMMANDS::Get,
+            ("set", _) => COMMANDS::Set,
+            ("config", "get") => COMMANDS::ConfigGet,
+            _ => COMMANDS::Invalid,
         }
     }
 }
@@ -34,22 +37,26 @@ pub struct RedisCommand {
 }
 
 impl RedisCommand {
-    pub fn new(tokens: Vec<String>) -> Result<RedisCommand> {
-        let command = COMMANDS::from_str(&tokens[0][..]);
+    pub fn new(mut tokens: Vec<String>) -> Result<RedisCommand> {
+        let command = if tokens.len() > 1 {
+            COMMANDS::from_str(&tokens[0], &tokens[1])
+        } else {
+            COMMANDS::from_str(&tokens[0], "")
+        };
         let mut expiry = SystemTime::now() + Duration::from_secs(u32::MAX as _);
 
         match command {
-            COMMANDS::ECHO => match tokens.len() {
+            COMMANDS::Echo => match tokens.len() {
                 3.. => bail!("ECHO - too many tokens"),
                 0..=1 => bail!("ECHO - too few tokens"),
                 _ => (),
             },
-            COMMANDS::GET => match tokens.len() {
+            COMMANDS::Get => match tokens.len() {
                 3.. => bail!("GET - too many tokens"),
                 0..=1 => bail!("GET - too few tokens"),
                 _ => (),
             },
-            COMMANDS::SET => match tokens.len() {
+            COMMANDS::Set => match tokens.len() {
                 6.. => bail!("SET - too many tokens"),
                 0..=2 => bail!("SET - too few tokens"),
                 4 => bail!("SET - missing time value"),
@@ -62,6 +69,13 @@ impl RedisCommand {
                 }
                 _ => (),
             },
+            COMMANDS::ConfigGet => match tokens.len() {
+                4.. => bail!("config get - too many tokens"),
+                2 => bail!("config get - too few tokens"),
+                3 => tokens = tokens[1..].to_vec(),
+                _ => (),
+            },
+
             _ => (),
         }
 

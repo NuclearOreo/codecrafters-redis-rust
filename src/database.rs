@@ -6,12 +6,16 @@ use std::time::SystemTime;
 #[derive(Debug, Clone)]
 pub struct DataBase {
     pub db: Arc<RwLock<HashMap<String, (String, SystemTime)>>>,
+    pub dir: String,
+    pub dbfilename: String,
 }
 
 impl DataBase {
-    pub fn new() -> Arc<DataBase> {
+    pub fn new(dir: String, dbfilename: String) -> Arc<DataBase> {
         Arc::new(DataBase {
             db: Arc::new(RwLock::new(HashMap::new())),
+            dir,
+            dbfilename,
         })
     }
 
