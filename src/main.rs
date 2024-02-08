@@ -9,10 +9,11 @@ const PORT: &str = "6379";
 
 fn main() -> Result<()> {
     println!("Logs from your program will appear here!");
-    let (dir, filename) = parse_args();
+    let (dir, dbfilename) = parse_args();
 
     let listener = TcpListener::bind(format!("{IP}:{PORT}"))?;
-    let database = DataBase::new(dir, filename);
+    let database = DataBase::new(dir, dbfilename);
+    let _ = database.load()?;
 
     for stream in listener.incoming() {
         match stream {
@@ -34,8 +35,7 @@ fn main() -> Result<()> {
 fn parse_args() -> (String, String) {
     let config_vals = args();
     let (mut dir_flag, mut dir) = (false, "".to_string());
-    let (mut name_flag, mut name) = (false, "".to_string());
-
+    let (mut name_flag, mut dbfilename) = (false, "".to_string());
     for v in config_vals {
         if !dir_flag && v == "--dir".to_string() {
             dir_flag = true;
@@ -43,10 +43,9 @@ fn parse_args() -> (String, String) {
             dir = v;
         } else if !name_flag && v == "--dbfilename".to_string() {
             name_flag = true;
-        } else if name_flag && name.is_empty() {
-            name = v;
+        } else if name_flag && dbfilename.is_empty() {
+            dbfilename = v;
         }
     }
-
-    (dir, name)
+    (dir, dbfilename)
 }

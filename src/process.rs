@@ -31,13 +31,17 @@ pub fn processor(mut stream: TcpStream, database: Arc<DataBase>) -> Result<()> {
                 match redis_cmd.command {
                     COMMANDS::Command => result("CONNECTED", &mut stream)?,
                     COMMANDS::Ping => result("PONG", &mut stream)?,
+                    COMMANDS::Keys => {
+                        let keys = database.get_key_list();
+                        array(keys, &mut stream)?
+                    }
                     COMMANDS::Get => {
                         let val = database.get(redis_cmd);
                         if val.is_empty() {
-                            null(&mut stream)?
-                        } else {
-                            result(&val, &mut stream)?
+                            null(&mut stream)?;
+                            continue;
                         }
+                        result(&val, &mut stream)?;
                     }
                     COMMANDS::Set => {
                         database.set(redis_cmd);
@@ -45,15 +49,12 @@ pub fn processor(mut stream: TcpStream, database: Arc<DataBase>) -> Result<()> {
                     }
                     COMMANDS::Echo => result(&redis_cmd.tokens[0], &mut stream)?,
                     COMMANDS::ConfigGet => {
-                        if redis_cmd.tokens[0] == "dir" {
-                            array(vec!["dir", &database.dir], &mut stream)?
-                        } else if redis_cmd.tokens[0] == "dbfilename" {
-                            array(vec!["dbfilename", &database.dbfilename], &mut stream)?
-                        } else {
-                            error("Unsupported key", &mut stream)?
+                        if let Some(v) = database.config_get(&redis_cmd.tokens[0]) {
+                            array(v, &mut stream)?;
+                            continue;
                         }
+                        error("Unsupported key", &mut stream)?
                     }
-
                     COMMANDS::Invalid => error("INVALID COMMAND", &mut stream)?,
                 }
             }
@@ -71,12 +72,13 @@ fn result(msg: &str, stream: &mut TcpStream) -> Result<()> {
     write(&s, stream)
 }
 
-fn array(array: Vec<&str>, stream: &mut TcpStream) -> Result<()> {
-    let mut s = format!("*{}\r\n", array.len());
-    for w in array {
-        s += &format!("${}\r\n{}\r\n", w.len(), w);
-    }
-    println!("{:?}", s);
+fn array(array: Vec<String>, stream: &mut TcpStream) -> Result<()> {
+    let s = array
+        .iter()
+        .fold(format!("*{}\r\n", array.len()), |mut v, w| {
+            v += &format!("${}\r\n{}\r\n", w.len(), w);
+            v
+        });
     write(&s, stream)
 }
 

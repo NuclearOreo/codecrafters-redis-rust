@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime};
 #[derive(Debug)]
 pub enum COMMANDS {
     Command,
+    Keys,
     Get,
     Ping,
     Echo,
@@ -19,6 +20,7 @@ impl COMMANDS {
         let token2 = token2.to_lowercase();
         match (&token1[..], &token2[..]) {
             ("command", _) => COMMANDS::Command,
+            ("keys", _) => COMMANDS::Keys,
             ("ping", _) => COMMANDS::Ping,
             ("echo", _) => COMMANDS::Echo,
             ("get", _) => COMMANDS::Get,
