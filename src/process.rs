@@ -1,5 +1,5 @@
 use crate::database::DataBase;
-use crate::redis_message::{RedisCommand, COMMANDS};
+use crate::redis_message::{Commands, RedisCommand};
 use crate::BUFFER_SIZE;
 use anyhow::Result;
 use std::sync::Arc;
@@ -29,13 +29,13 @@ pub fn processor(mut stream: TcpStream, database: Arc<DataBase>) -> Result<()> {
                 };
 
                 match redis_cmd.command {
-                    COMMANDS::Command => result("CONNECTED", &mut stream)?,
-                    COMMANDS::Ping => result("PONG", &mut stream)?,
-                    COMMANDS::Keys => {
+                    Commands::Command => result("CONNECTED", &mut stream)?,
+                    Commands::Ping => result("PONG", &mut stream)?,
+                    Commands::Keys => {
                         let keys = database.get_key_list();
                         array(keys, &mut stream)?
                     }
-                    COMMANDS::Get => {
+                    Commands::Get => {
                         let val = database.get(redis_cmd);
                         if val.is_empty() {
                             null(&mut stream)?;
@@ -43,19 +43,19 @@ pub fn processor(mut stream: TcpStream, database: Arc<DataBase>) -> Result<()> {
                         }
                         result(&val, &mut stream)?;
                     }
-                    COMMANDS::Set => {
+                    Commands::Set => {
                         database.set(redis_cmd);
                         result("OK", &mut stream)?
                     }
-                    COMMANDS::Echo => result(&redis_cmd.tokens[0], &mut stream)?,
-                    COMMANDS::ConfigGet => {
+                    Commands::Echo => result(&redis_cmd.tokens[0], &mut stream)?,
+                    Commands::ConfigGet => {
                         if let Some(v) = database.config_get(&redis_cmd.tokens[0]) {
                             array(v, &mut stream)?;
                             continue;
                         }
                         error("Unsupported key", &mut stream)?
                     }
-                    COMMANDS::Invalid => error("INVALID COMMAND", &mut stream)?,
+                    Commands::Invalid => error("INVALID COMMAND", &mut stream)?,
                 }
             }
             Err(e) => {

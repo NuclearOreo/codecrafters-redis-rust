@@ -13,7 +13,7 @@ fn main() -> Result<()> {
 
     let listener = TcpListener::bind(format!("{IP}:{PORT}"))?;
     let database = DataBase::new(dir, dbfilename);
-    let _ = database.load()?;
+    let _ = database.load();
 
     for stream in listener.incoming() {
         match stream {
