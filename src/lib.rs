@@ -1,5 +1,6 @@
 pub mod database;
 pub mod process;
+pub mod rdb;
 pub mod redis_message;
 
 // constants

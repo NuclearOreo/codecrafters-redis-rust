@@ -1,5 +1,5 @@
 use anyhow::Result;
-use redis_starter_rust::{database::DataBase, process::processor};
+use redis_starter_rust::{database::Database, process::processor};
 use std::env::args;
 use std::net::TcpListener;
 use std::thread;
@@ -12,8 +12,7 @@ fn main() -> Result<()> {
     let (dir, dbfilename) = parse_args();
 
     let listener = TcpListener::bind(format!("{IP}:{PORT}"))?;
-    let database = DataBase::new(dir, dbfilename);
-
+    let database = Database::new(dir, dbfilename);
     let _ = database.load();
 
     for stream in listener.incoming() {

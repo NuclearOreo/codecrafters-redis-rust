@@ -1,4 +1,4 @@
-use crate::database::DataBase;
+use crate::database::Database;
 use crate::redis_message::{Commands, RedisCommand};
 use crate::BUFFER_SIZE;
 use anyhow::Result;
@@ -8,7 +8,7 @@ use std::{
     net::TcpStream,
 };
 
-pub fn processor(mut stream: TcpStream, database: Arc<DataBase>) -> Result<()> {
+pub fn processor(mut stream: TcpStream, database: Arc<Database>) -> Result<()> {
     loop {
         let mut buf = [0; BUFFER_SIZE];
         match stream.read(&mut buf) {
