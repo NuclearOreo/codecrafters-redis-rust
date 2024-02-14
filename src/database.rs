@@ -67,13 +67,11 @@ impl Database {
         db.keys().cloned().collect()
     }
 
-    // Everything I need to know https://rdb.fnordig.de/file_format.html
     pub fn load(&self) -> Result<()> {
         if self.dbfilename.is_empty() {
             return Ok(());
         }
-        let mut rdb_file = RDB::new(self.dir.clone(), self.dbfilename.clone())?;
-        rdb_file.load()?;
+        let rdb_file = RDB::new(self.dir.clone(), self.dbfilename.clone())?;
 
         let db = self.db.write();
         if db.is_err() {
