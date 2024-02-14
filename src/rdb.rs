@@ -11,6 +11,19 @@ pub mod op_code {
     pub const SELECTDB: u8 = 0xFE;
     pub const EOF: u8 = 0xFF;
 }
+pub mod length_code {
+    pub const N6BIT: u8 = 0;
+    pub const N14BIT: u8 = 64;
+    pub const NEXT4BYTES: u8 = 128;
+    pub const SPECIAL: u8 = 192;
+}
+
+pub mod int_str_code {
+    pub const N8BIT: u8 = 0;
+    pub const N16BIT: u8 = 1;
+    pub const N32BIT: u8 = 2;
+    pub const COMPRESSED: u8 = 3;
+}
 
 // Everything I need to know https://rdb.fnordig.de/file_format.html
 pub struct RDB {
@@ -75,15 +88,12 @@ impl RDB {
                 }
                 op_code::EXPIRETIME => {
                     pointer += 1;
-                    let (b1, b2, b3, b4) = (
-                        self.buffer[pointer + 3],
-                        self.buffer[pointer + 2],
-                        self.buffer[pointer + 1],
-                        self.buffer[pointer],
-                    );
-                    let val =
-                        (b1 as u32) << 24 | (b2 as u32) << 16 | (b3 as u32) << 8 | (b4 as u32);
-                    expire_time = UNIX_EPOCH + Duration::from_secs(val as u64);
+                    let mut b = [0; 8];
+                    for i in 0..4 {
+                        b[i] = self.buffer[pointer + i];
+                    }
+                    let val = u64::from_le_bytes(b);
+                    expire_time = UNIX_EPOCH + Duration::from_secs(val);
                     pointer += 4;
                 }
                 op_code::EXPIRETIME_MS => {
@@ -116,46 +126,41 @@ impl RDB {
     fn length_encoding(&self, p: usize) -> Result<(usize, usize, bool)> {
         let code = self.buffer[p] & 192;
         match code {
-            0 => Ok((self.buffer[p] as usize, p + 1, false)),
-            64 => {
+            length_code::N6BIT => Ok((self.buffer[p] as usize, p + 1, false)),
+            length_code::N14BIT => {
                 let (mut byte1, byte2) = (self.buffer[p], self.buffer[p + 1]);
                 byte1 ^= 64;
-                let val = (byte2 as u16) << 8 | (byte1 as u16);
+                let val = u16::from_le_bytes([byte1, byte2]);
                 return Ok((val as usize, p + 2, false));
             }
-            128 => {
+            length_code::NEXT4BYTES => {
                 let p = p + 1;
-                let (b1, b2, b3, b4) = (
-                    self.buffer[p + 3],
-                    self.buffer[p + 2],
-                    self.buffer[p + 1],
-                    self.buffer[p],
-                );
-                let val = (b1 as u32) << 24 | (b2 as u32) << 16 | (b3 as u32) << 8 | (b4 as u32);
+                let mut b = [0; 4];
+                for i in 0..4 {
+                    b[i] = self.buffer[p + i];
+                }
+                let val = u32::from_le_bytes(b);
                 Ok((val as usize, p + 4, false))
             }
-            192 => {
+            length_code::SPECIAL => {
                 let special_code = self.buffer[p] ^ 192;
                 match special_code {
-                    0 => Ok((self.buffer[p + 1] as usize, p + 2, true)),
-                    1 => {
+                    int_str_code::N8BIT => Ok((self.buffer[p + 1] as usize, p + 2, true)),
+                    int_str_code::N16BIT => {
                         let (byte1, byte2) = (self.buffer[p + 1], self.buffer[p + 2]);
                         let val = ((byte2 as u16) << 8 | (byte1 as u16)) as usize;
                         Ok((val as usize, p + 2, true))
                     }
-                    2 => {
-                        let (b1, b2, b3, b4) = (
-                            self.buffer[p + 4],
-                            self.buffer[p + 3],
-                            self.buffer[p + 2],
-                            self.buffer[p + 1],
-                        );
-
-                        let val =
-                            (b1 as u32) << 24 | (b2 as u32) << 16 | (b3 as u32) << 8 | (b4 as u32);
-                        Ok((val as usize, p + 5, true))
+                    int_str_code::N32BIT => {
+                        let p = p + 1;
+                        let mut b = [0; 4];
+                        for i in 0..4 {
+                            b[i] = self.buffer[p + i];
+                        }
+                        let val = u32::from_le_bytes(b);
+                        Ok((val as usize, p + 4, true))
                     }
-                    3 => todo!(),
+                    int_str_code::COMPRESSED => todo!(),
                     _ => Ok((0, p + 1, true)),
                 }
             }
